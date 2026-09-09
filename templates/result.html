@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Парсинг завершён</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 0 20px;
+
+            background: #f5f7f9;
+            color: #222;
+        }
+
+        .card {
+            background: white;
+
+            padding: 28px;
+
+            border-radius: 12px;
+
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        .stats {
+            display: grid;
+
+            grid-template-columns: repeat(2, 1fr);
+
+            gap: 12px;
+
+            margin: 22px 0;
+        }
+
+        .stat {
+            padding: 14px;
+
+            border-radius: 8px;
+
+            background: #eef4f8;
+        }
+
+        .number {
+            display: block;
+
+            font-size: 24px;
+            font-weight: bold;
+
+            margin-bottom: 4px;
+        }
+
+        a.button {
+            display: inline-block;
+
+            text-decoration: none;
+
+            padding: 12px 20px;
+
+            border-radius: 8px;
+
+            background: #1f4e78;
+            color: white;
+
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+
+        a.secondary {
+            background: #6c757d;
+        }
+
+        details {
+            margin-top: 24px;
+        }
+
+        .error {
+            margin: 8px 0;
+
+            padding: 10px;
+
+            background: #fff1f1;
+
+            border-radius: 6px;
+
+            overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 650px) {
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <h1>
+        Парсинг завершён
+    </h1>
+
+
+    <p>
+        Поисковый запрос:
+        <strong>{{ search_string }}</strong>
+    </p>
+
+
+    <div class="stats">
+
+        <div class="stat">
+
+            <span class="number">
+                {{ contracts_count }}
+            </span>
+
+            контрактов
+
+        </div>
+
+
+        <div class="stat">
+
+            <span class="number">
+                {{ medicines_count }}
+            </span>
+
+            строк препаратов
+
+        </div>
+
+
+        <div class="stat">
+
+            <span class="number">
+                {{ upd_count }}
+            </span>
+
+            строк из UPD
+
+        </div>
+
+
+        <div class="stat">
+
+            <span class="number">
+                {{ lp_count }}
+            </span>
+
+            строк поставленных ЛП
+
+        </div>
+
+    </div>
+
+
+    <p>
+        Ошибок / предупреждений:
+        <strong>{{ errors_count }}</strong>
+    </p>
+
+
+    <a
+        class="button"
+        href="/download/{{ filename }}"
+    >
+        Скачать Excel
+    </a>
+
+
+    <a
+        class="button secondary"
+        href="/"
+    >
+        Новый запрос
+    </a>
+
+
+    {% if errors %}
+
+        <details>
+
+            <summary>
+                Показать ошибки и предупреждения
+            </summary>
+
+
+            {% for error in errors %}
+
+                <div class="error">
+
+                    <strong>
+                        {{ error.registry_number }}
+                    </strong>
+
+                    <br>
+
+                    Этап:
+                    {{ error.stage }}
+
+                    <br>
+
+                    {{ error.error }}
+
+                </div>
+
+            {% endfor %}
+
+        </details>
+
+    {% endif %}
+
+</div>
+
+</body>
+</html>

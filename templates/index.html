@@ -1,0 +1,252 @@
+
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Парсер закупок лекарственных препаратов</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 850px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #f5f7f9;
+            color: #222;
+        }
+
+        .card {
+            background: white;
+            padding: 28px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,.08);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 26px;
+        }
+
+        .description {
+            color: #555;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 7px;
+        }
+
+        input:not([type="checkbox"]),
+        select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid #cdd3d8;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+
+        .checkbox-block {
+            grid-column: 1 / -1;
+            padding: 14px 16px;
+            background: #eef4f8;
+            border-radius: 8px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin: 0;
+            font-weight: 600;
+            line-height: 1.4;
+            cursor: pointer;
+        }
+
+        .checkbox-label input {
+            width: auto;
+            margin-top: 3px;
+            flex: 0 0 auto;
+        }
+
+        .checkbox-hint {
+            margin: 7px 0 0 27px;
+            color: #5a6570;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        button {
+            margin-top: 24px;
+            border: 0;
+            border-radius: 8px;
+            padding: 12px 22px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #1f4e78;
+            color: white;
+        }
+
+        button:hover {
+            opacity: .92;
+        }
+
+        .note {
+            margin-top: 18px;
+            padding: 12px 14px;
+            background: #eef4f8;
+            border-radius: 7px;
+            font-size: 14px;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 650px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .full {
+                grid-column: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Парсер государственных закупок лекарственных препаратов</h1>
+
+    <div class="description">
+        Поиск контрактов ЕИС по 44-ФЗ с последующим сбором сведений
+        о препаратах, УПД и поставленных лекарственных препаратах.
+        Результат формируется в Excel.
+    </div>
+
+    <form method="post" action="/run">
+        <div class="grid">
+            <div class="full">
+                <label for="search_string">Поисковая строка</label>
+                <input
+                    id="search_string"
+                    name="search_string"
+                    value="{{ defaults.search_string }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label for="date_from">Дата размещения от</label>
+                <input
+                    id="date_from"
+                    name="date_from"
+                    type="date"
+                    value="{{ defaults.date_from }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label for="date_to">Дата размещения до</label>
+                <input
+                    id="date_to"
+                    name="date_to"
+                    type="date"
+                    value="{{ defaults.date_to }}"
+                    required
+                >
+            </div>
+
+            <div>
+                <label for="records_per_page">Результатов ЕИС на странице</label>
+                <select
+                    id="records_per_page"
+                    name="records_per_page"
+                >
+                    <option
+                        value="10"
+                        {% if defaults.records_per_page == "10" %}selected{% endif %}
+                    >10</option>
+                    <option
+                        value="20"
+                        {% if defaults.records_per_page == "20" %}selected{% endif %}
+                    >20</option>
+                    <option
+                        value="50"
+                        {% if defaults.records_per_page == "50" %}selected{% endif %}
+                    >50</option>
+                </select>
+            </div>
+
+
+            <div class="checkbox-block">
+                <label class="checkbox-label" for="drug_znvlp">
+                    <input
+                        id="drug_znvlp"
+                        name="drug_znvlp"
+                        type="checkbox"
+                        value="true"
+                        {% if defaults.drug_znvlp %}checked{% endif %}
+                    >
+                    <span>
+                        Лекарственный препарат включен в перечень
+                        жизненно необходимых и важнейших лекарственных
+                        препаратов (ЖНВЛП)
+                    </span>
+                </label>
+
+                <div class="checkbox-hint">
+                    При установленной галочке поиск выполняется
+                    с фильтром ЖНВЛП. Если галочка снята — фильтр
+                    ЖНВЛП не применяется.
+                </div>
+            </div>
+
+            <div class="full">
+                <label for="max_contracts">
+                    Максимум контрактов
+                    <span style="font-weight: normal; color: #667;">
+                        (необязательно)
+                    </span>
+                </label>
+                <input
+                    id="max_contracts"
+                    name="max_contracts"
+                    type="number"
+                    min="1"
+                    value="{{ defaults.max_contracts }}"
+                    placeholder="Оставьте пустым для полной выгрузки"
+                >
+            </div>
+        </div>
+
+        <button type="submit">Запустить парсинг</button>
+    </form>
+
+    <div class="note">
+        <strong>По умолчанию выполняется полная выгрузка.</strong>
+        Программа автоматически проходит все страницы поисковой выдачи ЕИС
+        за выбранный период и останавливается только на последней странице.
+        <br><br>
+        Поле «Максимум контрактов» используется только как необязательный
+        лимит для тестовых или сокращённых запусков. Если оно пустое,
+        обрабатываются все найденные контракты.
+        <br><br>
+        Значение «Результатов ЕИС на странице» влияет только на количество
+        запросов к поиску: 50 обычно быстрее и не ограничивает полноту выгрузки.
+    </div>
+</div>
+</body>
+</html>
