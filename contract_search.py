@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from urllib.parse import parse_qs, urljoin, urlparse
 
@@ -20,6 +20,7 @@ class ContractSearchParams:
     date_to: str
     records_per_page: int = 10
     drug_znvlp: bool = True
+    customer_places: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         if not self.search_string.strip():
@@ -40,6 +41,31 @@ class ContractSearchParams:
             raise ValueError(
                 "Для тестовой версии records_per_page должен быть 10, 20 или 50."
             )
+
+        customer_places = list(
+            dict.fromkeys(
+                code.strip()
+                for code in self.customer_places
+                if code and code.strip()
+            )
+        )
+
+        if len(customer_places) > 5:
+            raise ValueError(
+                "ЕИС позволяет выбрать не более 5 значений "
+                "в фильтре 'Местоположение заказчика'."
+            )
+
+        for code in customer_places:
+            if not re.fullmatch(
+                r"(?:OKER\d{2}|\d{11})",
+                code,
+                flags=re.I,
+            ):
+                raise ValueError(
+                    "Некорректный код местоположения заказчика: "
+                    f"{code}"
+                )
 
     def to_query_params(self, page_number: int) -> dict[str, str]:
         self.validate()
@@ -68,6 +94,24 @@ class ContractSearchParams:
         # отправляется в ЕИС.
         if self.drug_znvlp:
             params["drugZnvlp"] = "on"
+
+        customer_places = list(
+            dict.fromkeys(
+                code.strip()
+                for code in self.customer_places
+                if code and code.strip()
+            )
+        )
+
+        if customer_places:
+            params["customerPlace"] = ",".join(
+                customer_places
+            )
+
+            if len(customer_places) > 1:
+                params["customerPlaceCodes"] = "," * (
+                    len(customer_places) - 1
+                )
 
         return params
 

@@ -12,7 +12,12 @@ from bs4 import BeautifulSoup
 
 from lp_parser import LpParser, LpParserError
 from upd_parser import UpdParser, UpdParserError
-from zakupki_client import BASE_URL, ZakupkiClient, ZakupkiClientError
+from zakupki_client import (
+    BASE_URL,
+    EISTemporaryBlockError,
+    ZakupkiClient,
+    ZakupkiClientError,
+)
 
 
 @dataclass(slots=True)
@@ -132,13 +137,16 @@ class UpdService:
         archive: UpdArchiveLink,
     ) -> io.BytesIO:
         try:
-            response = self.client.session.get(
+            # Используем тот же механизм 429/backoff,
+            # что и для HTML-страниц ЕИС.
+            response = self.client._request_get(
                 archive.url,
-                timeout=self.client.timeout,
-                allow_redirects=True,
-                verify=self.client.verify_ssl,
                 stream=True,
             )
+        except EISTemporaryBlockError:
+            # Это глобальная блокировка ЕИС.
+            # Передаём выше без преобразования, чтобы pipeline остановился.
+            raise
         except Exception as exc:
             raise ZakupkiClientError(
                 f"Не удалось скачать UPD ZIP {archive.filename}: {exc}"
@@ -406,6 +414,11 @@ class UpdService:
 
                 if not archive_result.errors:
                     print("        OK")
+
+            except EISTemporaryBlockError:
+                # Никаких следующих ZIP этого или следующего контракта:
+                # блокировка должна обрабатываться на уровне pipeline.
+                raise
 
             except Exception as exc:
                 result.errors.append(

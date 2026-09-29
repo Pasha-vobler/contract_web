@@ -1,0 +1,27 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+      APP_PORT: ${APP_PORT:-8000}
+      ZAKUPKI_VERIFY_SSL: ${ZAKUPKI_VERIFY_SSL:-true}
+      ZAKUPKI_MIN_REQUEST_INTERVAL: ${ZAKUPKI_MIN_REQUEST_INTERVAL:-1.2}
+      ZAKUPKI_PROACTIVE_PAUSE_EVERY: ${ZAKUPKI_PROACTIVE_PAUSE_EVERY:-40}
+      ZAKUPKI_PROACTIVE_PAUSE_SECONDS: ${ZAKUPKI_PROACTIVE_PAUSE_SECONDS:-20}
+      ZAKUPKI_BLOCK_RETRIES: ${ZAKUPKI_BLOCK_RETRIES:-3}
+      REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
+    volumes:
+      - ./output:/app/output
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

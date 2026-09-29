@@ -27,6 +27,21 @@
             font-size: 26px;
         }
 
+        .active-job {
+            margin: 0 0 22px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            background: #fff4d6;
+            color: #5f4800;
+        }
+
+        .active-job a {
+            display: inline-block;
+            margin-top: 8px;
+            color: #1f4e78;
+            font-weight: 600;
+        }
+
         .description {
             color: #555;
             line-height: 1.5;
@@ -90,6 +105,108 @@
             line-height: 1.4;
         }
 
+
+        .location-block {
+            grid-column: 1 / -1;
+            border: 1px solid #d6dde3;
+            border-radius: 9px;
+            padding: 14px 16px;
+        }
+
+        .location-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .location-title {
+            font-weight: 600;
+        }
+
+        .location-open {
+            margin: 0;
+            padding: 8px 14px;
+            font-size: 14px;
+            background: #5d7487;
+        }
+
+        .location-panel {
+            margin-top: 14px;
+            border-top: 1px solid #e1e6ea;
+            padding-top: 12px;
+        }
+
+        .location-row {
+            margin: 6px 0;
+        }
+
+        .location-parent {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .location-parent label,
+        .location-child label {
+            margin: 0;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .location-expand {
+            width: 26px;
+            height: 26px;
+            border: 0;
+            background: transparent;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .location-expand.placeholder {
+            visibility: hidden;
+        }
+
+        .location-children {
+            margin-left: 34px;
+            padding-left: 12px;
+            border-left: 1px solid #dde3e8;
+        }
+
+        .location-child {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .location-code {
+            color: #8a949c;
+            font-size: 11px;
+            margin-left: 5px;
+        }
+
+        .location-summary {
+            color: #586570;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .location-error {
+            color: #a52a2a;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .location-loading {
+            color: #68737c;
+            font-size: 13px;
+            padding: 6px 0;
+        }
+
         button {
             margin-top: 24px;
             border: 0;
@@ -134,6 +251,15 @@
         о препаратах, УПД и поставленных лекарственных препаратах.
         Результат формируется в Excel.
     </div>
+
+    {% if active_job %}
+    <div class="active-job">
+        <strong>Сейчас выполняется выгрузка.</strong><br>
+        Сервер не запустит второй массовый парсинг параллельно.
+        <br>
+        <a href="/jobs/{{ active_job.job_id }}">Перейти к прогрессу</a>
+    </div>
+    {% endif %}
 
     <form method="post" action="/run">
         <div class="grid">
@@ -214,6 +340,54 @@
                 </div>
             </div>
 
+
+            <div class="location-block">
+                <div class="location-header">
+                    <div>
+                        <div class="location-title">
+                            Местоположение заказчика
+                        </div>
+                        <div
+                            id="locationSummary"
+                            class="location-summary"
+                        >
+                            Не выбрано — поиск по всем местоположениям
+                        </div>
+                    </div>
+
+                    <button
+                        id="locationToggle"
+                        class="location-open"
+                        type="button"
+                    >
+                        Выбрать
+                    </button>
+                </div>
+
+                <div
+                    id="locationPanel"
+                    class="location-panel"
+                    hidden
+                >
+                    <div class="location-summary">
+                        Можно выбрать федеральный округ целиком
+                        или отдельный субъект РФ. Не более 5 значений.
+                    </div>
+
+                    <div
+                        id="locationTree"
+                        class="location-loading"
+                    >
+                        Нажмите «Выбрать» для загрузки справочника.
+                    </div>
+
+                    <div
+                        id="locationError"
+                        class="location-error"
+                    ></div>
+                </div>
+            </div>
+
             <div class="full">
                 <label for="max_contracts">
                     Максимум контрактов
@@ -232,7 +406,9 @@
             </div>
         </div>
 
-        <button type="submit">Запустить парсинг</button>
+        <button type="submit" {% if active_job %}disabled{% endif %}>
+            {% if active_job %}Выгрузка уже выполняется{% else %}Запустить парсинг{% endif %}
+        </button>
     </form>
 
     <div class="note">
@@ -248,5 +424,250 @@
         запросов к поиску: 50 обычно быстрее и не ограничивает полноту выгрузки.
     </div>
 </div>
+
+<script>
+(function () {
+    const toggle = document.getElementById("locationToggle");
+    const panel = document.getElementById("locationPanel");
+    const tree = document.getElementById("locationTree");
+    const errorBox = document.getElementById("locationError");
+    const summary = document.getElementById("locationSummary");
+
+    let rootLoaded = false;
+    const MAX_SELECTED = 5;
+
+    function selectedCheckboxes() {
+        return Array.from(
+            document.querySelectorAll(
+                'input[name="customer_places"]:checked'
+            )
+        );
+    }
+
+    function updateSummary() {
+        const selected = selectedCheckboxes();
+
+        if (selected.length === 0) {
+            summary.textContent =
+                "Не выбрано — поиск по всем местоположениям";
+            return;
+        }
+
+        const names = selected.map(
+            item => item.dataset.name || item.value
+        );
+
+        summary.textContent =
+            `Выбрано: ${selected.length} — ${names.join(", ")}`;
+    }
+
+    function enforceLimit(event) {
+        const checkbox = event.target;
+
+        if (!checkbox.checked) {
+            errorBox.textContent = "";
+            updateSummary();
+            return;
+        }
+
+        const selected = selectedCheckboxes();
+
+        if (selected.length > MAX_SELECTED) {
+            checkbox.checked = false;
+            errorBox.textContent =
+                "Можно выбрать не более 5 местоположений.";
+        } else {
+            errorBox.textContent = "";
+        }
+
+        updateSummary();
+    }
+
+    function makeCheckbox(item, className) {
+        const wrapper = document.createElement("div");
+        wrapper.className = className;
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "customer_places";
+        checkbox.value = item.code;
+        checkbox.dataset.name = item.name;
+        checkbox.id =
+            "customerPlace_" +
+            item.code.replace(/[^a-zA-Z0-9]/g, "_");
+        checkbox.addEventListener("change", enforceLimit);
+
+        const label = document.createElement("label");
+        label.htmlFor = checkbox.id;
+        label.textContent = item.name;
+
+        const code = document.createElement("span");
+        code.className = "location-code";
+        code.textContent = item.code;
+        label.appendChild(code);
+
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(label);
+
+        return wrapper;
+    }
+
+    async function loadChildren(
+        item,
+        childrenContainer,
+        expandButton
+    ) {
+        if (childrenContainer.dataset.loaded === "true") {
+            const hidden = childrenContainer.hidden;
+            childrenContainer.hidden = !hidden;
+            expandButton.textContent = hidden ? "▾" : "›";
+            return;
+        }
+
+        childrenContainer.hidden = false;
+        childrenContainer.innerHTML =
+            '<div class="location-loading">Загрузка...</div>';
+
+        try {
+            const response = await fetch(
+                `/api/customer-places/children/${encodeURIComponent(item.code)}`
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const children = await response.json();
+            childrenContainer.innerHTML = "";
+
+            if (children.length === 0) {
+                childrenContainer.innerHTML =
+                    '<div class="location-loading">Нет дочерних территорий</div>';
+            } else {
+                for (const child of children) {
+                    childrenContainer.appendChild(
+                        makeCheckbox(
+                            child,
+                            "location-child"
+                        )
+                    );
+                }
+            }
+
+            childrenContainer.dataset.loaded = "true";
+            expandButton.textContent = "▾";
+
+        } catch (error) {
+            childrenContainer.innerHTML = "";
+            errorBox.textContent =
+                "Не удалось загрузить регионы: " +
+                error.message;
+        }
+    }
+
+    function renderRoot(items) {
+        tree.className = "";
+        tree.innerHTML = "";
+
+        for (const item of items) {
+            const row = document.createElement("div");
+            row.className = "location-row";
+
+            const parentLine =
+                document.createElement("div");
+            parentLine.className = "location-parent";
+
+            const expand =
+                document.createElement("button");
+            expand.type = "button";
+            expand.className = "location-expand";
+
+            if (item.isFolder) {
+                expand.textContent = "›";
+            } else {
+                expand.textContent = "›";
+                expand.classList.add("placeholder");
+            }
+
+            const checkboxWrapper =
+                makeCheckbox(item, "location-parent");
+
+            while (checkboxWrapper.firstChild) {
+                parentLine.appendChild(
+                    checkboxWrapper.firstChild
+                );
+            }
+
+            parentLine.insertBefore(
+                expand,
+                parentLine.firstChild
+            );
+
+            const children =
+                document.createElement("div");
+            children.className = "location-children";
+            children.hidden = true;
+
+            if (item.isFolder) {
+                expand.addEventListener(
+                    "click",
+                    () => loadChildren(
+                        item,
+                        children,
+                        expand
+                    )
+                );
+            }
+
+            row.appendChild(parentLine);
+            row.appendChild(children);
+            tree.appendChild(row);
+        }
+    }
+
+    async function loadRoot() {
+        if (rootLoaded) {
+            return;
+        }
+
+        tree.className = "location-loading";
+        tree.textContent =
+            "Загрузка федеральных округов...";
+        errorBox.textContent = "";
+
+        try {
+            const response = await fetch(
+                "/api/customer-places/root"
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const items = await response.json();
+            renderRoot(items);
+            rootLoaded = true;
+
+        } catch (error) {
+            tree.textContent = "";
+            errorBox.textContent =
+                "Не удалось загрузить справочник ЕИС: " +
+                error.message;
+        }
+    }
+
+    toggle.addEventListener("click", async function () {
+        panel.hidden = !panel.hidden;
+
+        if (!panel.hidden) {
+            toggle.textContent = "Скрыть";
+            await loadRoot();
+        } else {
+            toggle.textContent = "Выбрать";
+        }
+    });
+})();
+</script>
+
 </body>
 </html>

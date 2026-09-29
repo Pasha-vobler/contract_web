@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Прогресс выгрузки ЕИС</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 850px; margin: 40px auto;
+            padding: 0 20px; background: #f5f7f9; color: #222; }
+        .card { background: white; padding: 28px; border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+        h1 { margin-top: 0; font-size: 26px; }
+        .status { font-size: 20px; margin: 18px 0; }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .stat { padding: 14px; border-radius: 8px; background: #eef4f8; }
+        .number { display: block; font-size: 24px; font-weight: bold; margin-bottom: 4px; }
+        .progress { height: 20px; margin: 20px 0 8px; overflow: hidden;
+            border-radius: 10px; background: #e2e7eb; }
+        .progress-bar { height: 100%; width: 0; background: #1f7a4d; transition: width .3s; }
+        .progress-text { color: #586570; text-align: right; }
+        .detail { margin-top: 20px; line-height: 1.7; }
+        .pause { display: none; margin-top: 18px; padding: 14px; border-radius: 8px;
+            background: #fff4d6; color: #5f4800; }
+        .fatal { display: none; margin-top: 18px; padding: 14px; border-radius: 8px;
+            background: #fff1f1; color: #8b1d1d; overflow-wrap: anywhere; }
+        .actions { margin-top: 24px; }
+        a.button { display: none; text-decoration: none; padding: 12px 20px;
+            border-radius: 8px; background: #1f4e78; color: white; margin: 8px 8px 0 0; }
+        a.secondary { background: #6c757d; }
+        @media (max-width: 650px) { .stats { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>Выгрузка данных ЕИС</h1>
+    <div class="status">Статус: <strong id="status">{{ job.status_label }}</strong></div>
+    <div class="stats">
+        <div class="stat"><span class="number" id="total">{{ job.total_contracts }}</span>найдено</div>
+        <div class="stat"><span class="number" id="processed">{{ job.processed_contracts }}</span>обработано</div>
+        <div class="stat"><span class="number" id="remaining">{{ job.remaining_contracts }}</span>осталось</div>
+    </div>
+    <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-text"><span id="percent">{{ job.progress_percent }}</span>%</div>
+    <div class="detail">
+        <div>Текущий контракт: <strong id="contractPosition">—</strong></div>
+        <div>Номер: <strong id="registryNumber">{{ job.current_registry_number or '—' }}</strong></div>
+        <div>Этап: <strong id="stage">{{ job.current_stage or '—' }}</strong></div>
+        <div>Ошибок: <strong id="errors">{{ job.error_count }}</strong>;
+            предупреждений: <strong id="warnings">{{ job.warning_count }}</strong></div>
+    </div>
+    <div class="pause" id="pauseBox">
+        <strong id="pauseReason"></strong><br>
+        <span id="retryText"></span>
+    </div>
+    <div class="fatal" id="fatalBox"></div>
+    <div class="actions">
+        <a class="button" id="downloadButton" href="#">Скачать Excel</a>
+        <a class="button secondary" id="newSearchButton" href="/">Новый поиск</a>
+    </div>
+</div>
+<script>
+(function () {
+    const jobId = {{ job.job_id | tojson }};
+    let retryAt = null;
+    let polling = true;
+
+    function secondsUntilRetry() {
+        if (!retryAt) return null;
+        return Math.max(0, Math.ceil((new Date(retryAt).getTime() - Date.now()) / 1000));
+    }
+
+    function renderRetry() {
+        const seconds = secondsUntilRetry();
+        document.getElementById("retryText").textContent =
+            seconds === null ? "Ожидаем снятия ограничения." : `Повтор примерно через ${seconds} сек.`;
+    }
+
+    function render(job) {
+        document.getElementById("status").textContent = job.status_label;
+        document.getElementById("total").textContent = job.total_contracts;
+        document.getElementById("processed").textContent = job.processed_contracts;
+        document.getElementById("remaining").textContent = job.remaining_contracts;
+        document.getElementById("percent").textContent = job.progress_percent;
+        document.getElementById("progressBar").style.width = `${job.progress_percent}%`;
+        document.getElementById("contractPosition").textContent =
+            job.current_contract_index && job.total_contracts
+                ? `${job.current_contract_index} / ${job.total_contracts}` : "—";
+        document.getElementById("registryNumber").textContent = job.current_registry_number || "—";
+        document.getElementById("stage").textContent = job.current_stage || "—";
+        document.getElementById("errors").textContent = job.error_count;
+        document.getElementById("warnings").textContent = job.warning_count;
+
+        const pauseBox = document.getElementById("pauseBox");
+        retryAt = job.retry_at;
+        pauseBox.style.display = job.status === "paused" ? "block" : "none";
+        document.getElementById("pauseReason").textContent = job.pause_reason || "";
+        if (job.status === "paused") renderRetry();
+
+        const fatalBox = document.getElementById("fatalBox");
+        fatalBox.style.display = job.fatal_error ? "block" : "none";
+        fatalBox.textContent = job.fatal_error || "";
+
+        const download = document.getElementById("downloadButton");
+        download.style.display = job.download_url ? "inline-block" : "none";
+        if (job.download_url) download.href = job.download_url;
+        document.getElementById("newSearchButton").style.display =
+            job.is_active ? "none" : "inline-block";
+        polling = job.is_active;
+    }
+
+    async function update() {
+        try {
+            const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {cache: "no-store"});
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            render(await response.json());
+        } catch (error) {
+            document.getElementById("status").textContent = `Не удалось обновить: ${error.message}`;
+        }
+        if (polling) window.setTimeout(update, 1500);
+    }
+
+    render({{ job | tojson }});
+    window.setInterval(renderRetry, 1000);
+    if (polling) window.setTimeout(update, 500);
+})();
+</script>
+</body>
+</html>
