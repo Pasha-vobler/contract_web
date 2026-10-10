@@ -6,5 +6,6 @@ __pycache__/
 .pytest_cache/
 .env
 output/*
+certs/
 *.xlsx
 test_*.py

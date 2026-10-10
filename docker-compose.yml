@@ -15,6 +15,8 @@ services:
       REQUESTS_CA_BUNDLE: ${REQUESTS_CA_BUNDLE:-}
     volumes:
       - ./output:/app/output
+      # CA-файлы остаются на сервере и доступны приложению только для чтения.
+      - ./certs:/app/certs:ro
     healthcheck:
       test:
         - CMD
